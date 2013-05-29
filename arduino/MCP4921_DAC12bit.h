@@ -12,22 +12,25 @@
 #include <Arduino.h>
 //#include <avr/pgmspace.h>
 
-#define VREF 2.048
+#define VREF_MAX 5.46 /*Vdd_MAX - 0.04 V */ 
 #define RES12BIT 4096
 
 class MCP4921_DAC12bitClass {
 public:
   MCP4921_DAC12bitClass(int slaveSelectLowPin,
                         int ldacLowPin,
+                        float refVoltage
                        );
   //Configuration methods
   void begin(); // Default
   void end();
   //Functionality methods
+  int setVoltageReference(float voltage);
   int setVoltageOutput(float voltage);
 private:
   int _slaveSelectLowPin;
   int _ldacLowPin;
+  float _refVoltage;
 };
 
 

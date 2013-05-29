@@ -16,11 +16,13 @@
 
 //configure the DAC chip
 MCP4921_DAC12bitClass voltageDAC(9,  //slaveSelectLowPin
-                                 8,  //ldacLowPin
+                                 8,   //ldacLowPin
+                                 2.49 //reference voltage
                                 );
 
 
 void setup() {
+  Serial.begin(9600);
   //start up the SPI bus                   
   SPI.begin();
   SPI.setBitOrder(MSBFIRST);
@@ -35,6 +37,8 @@ void loop() {
   for (int i=0; i < NUM_STEPS; i++){
     voltage = V_MIN + voltage_step*i;
     voltageDAC.setVoltageOutput(voltage);
-    delay(DELAY_ms);
+    Serial.print("voltage = ");      
+    Serial.println(voltage);
+    while (Serial.read() != '\n'){};
   }  
 }
