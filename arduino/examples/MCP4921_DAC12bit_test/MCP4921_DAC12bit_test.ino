@@ -17,7 +17,6 @@
 //configure the DAC chip
 MCP4921_DAC12bitClass voltageDAC(9,  //slaveSelectLowPin
                                  8,  //ldacLowPin
-                                 10  //shutdownLowPin
                                 );
 
 

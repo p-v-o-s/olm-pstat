@@ -10,24 +10,29 @@
 #include "MCP4921_DAC12bit.h"
 
 MCP4921_DAC12bitClass::MCP4921_DAC12bitClass(int slaveSelectLowPin,
-                                             int ldacLowPin
+                                             int ldacLowPin,
+                                             int shutdownLowPin
                                             ){
   //initialize the pin mapping
   _slaveSelectLowPin = slaveSelectLowPin;
   _ldacLowPin        = ldacLowPin;
+  _shutdownLowPin    = shutdownLowPin;
 }
 
 void MCP4921_DAC12bitClass::begin() {
   // Configure the Arduino pins
+  pinMode(_shutdownLowPin, OUTPUT);
   pinMode(_slaveSelectLowPin, OUTPUT);
   pinMode(_ldacLowPin, OUTPUT);
   
+  digitalWrite(_shutdownLowPin, HIGH);     //activate
   digitalWrite(_slaveSelectLowPin, HIGH);  //comm. off
   digitalWrite(_ldacLowPin, HIGH);         //latch off
 }
 
 void MCP4921_DAC12bitClass::end() {
   //turn all pins off
+  digitalWrite(_shutdownLowPin, LOW);
   digitalWrite(_slaveSelectLowPin, LOW);
   digitalWrite(_ldacLowPin, LOW);
 }

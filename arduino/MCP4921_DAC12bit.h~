@@ -19,6 +19,7 @@ class MCP4921_DAC12bitClass {
 public:
   MCP4921_DAC12bitClass(int slaveSelectLowPin,
                         int ldacLowPin,
+                        int shutdownLowPin
                        );
   //Configuration methods
   void begin(); // Default
@@ -26,6 +27,7 @@ public:
   //Functionality methods
   int setVoltageOutput(float voltage);
 private:
+  int _shutdownLowPin;
   int _slaveSelectLowPin;
   int _ldacLowPin;
 };
