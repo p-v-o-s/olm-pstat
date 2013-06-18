@@ -40,7 +40,7 @@ int MCP4921_DAC12bitClass::setVoltageReference(float voltage) {
     _refVoltage = voltage;
     return 0;
   }
-  else{ return -1; }
+  else{ return -1; }          //error, out of range
 }
 
 int MCP4921_DAC12bitClass::setVoltageOutput(float voltage){
@@ -53,16 +53,17 @@ int MCP4921_DAC12bitClass::setVoltageOutput(float voltage){
     gain_bit = 1; 
     volt_digits = int( voltage/_refVoltage*RES12BIT );
   }     
-  else{ 
+  else if (voltage <= VREF_MAX){ 
     gain_bit = 0; 
     volt_digits = int( 0.5*voltage/_refVoltage*RES12BIT );
   }     
+  else{ return -1; }          //error, out of range
   
   packet = volt_digits << 0;  //shift voltage setting digits
   packet |= 1 << 12;          //add software activate
   packet |= gain_bit << 13;   //add gain setting
   packet |= 1 << 14;          //set buffered mode
-  Serial.println(packet);
+  //Serial.println(packet);
   digitalWrite(_slaveSelectLowPin, LOW);   //set chip as listener
   SPI.transfer(highByte(packet));          //send packet
   SPI.transfer(lowByte(packet));

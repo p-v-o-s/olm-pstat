@@ -10,8 +10,8 @@
 #include <MCP4921_DAC12bit.h>
 
 #define V_MIN 0.0
-#define V_MAX 3.0
-#define NUM_STEPS 30
+#define V_MAX 5.0
+#define NUM_STEPS 50
 #define DELAY_ms 2000
 
 //configure the DAC chip
