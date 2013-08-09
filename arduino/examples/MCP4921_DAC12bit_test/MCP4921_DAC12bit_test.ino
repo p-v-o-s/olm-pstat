@@ -9,15 +9,16 @@
 #include <SPI.h>
 #include <MCP4921_DAC12bit.h>
 
-#define V_MIN 0.0
-#define V_MAX 5.0
-#define NUM_STEPS 50
+#define V_REF 3.29
+#define V_MIN -V_REF/2.0
+#define V_MAX  V_REF/2.0
+#define NUM_STEPS 20
 #define DELAY_ms 2000
 
 //configure the DAC chip
-MCP4921_DAC12bitClass voltageDAC(9,  //slaveSelectLowPin
-                                 8,   //ldacLowPin
-                                 2.49 //reference voltage
+MCP4921_DAC12bitClass voltageDAC(3,  //slaveSelectLowPin
+                                 3,   //ldacLowPin
+                                 V_REF/2.0 //reference voltage
                                 );
 
 
@@ -34,9 +35,9 @@ void setup() {
 void loop() {
   float voltage_step = (V_MAX - V_MIN)/NUM_STEPS;
   float voltage = V_MIN; 
-  for (int i=0; i < NUM_STEPS; i++){
+  for (int i=0; i <= NUM_STEPS; i++){
     voltage = V_MIN + voltage_step*i;
-    voltageDAC.setVoltageOutput(voltage);
+    voltageDAC.setVoltageOutput(voltage + V_REF/2.0);
     Serial.print("voltage = ");      
     Serial.println(voltage);
     while (Serial.read() != '\n'){};
