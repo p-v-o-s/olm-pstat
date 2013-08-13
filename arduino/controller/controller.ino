@@ -13,7 +13,7 @@
 #define V_VGND V_REF/2.0
 #define R_CURRSENSE 1000.0
 
-#define DELTA_V 0.1
+#define DELTA_V 0.05
 #define V_MIN (-V_REF/2.0 + DELTA_V)
 #define V_MAX ( V_REF/2.0 - DELTA_V)
 #define NUM_STEPS 100
@@ -90,35 +90,43 @@ void doSweep() {
 //------------------------------------------------------------------------------
 //COMMAND HANDLER FUNCTIONS - called by the SCmd dispatcher
 
-void setControlVoltgeCommand(){
-    float control_voltage;
-    char *arg;
-    arg = SCmd.next();
-    if (arg != NULL)
+void setControlVoltageCommand(){
+  float control_voltage;
+  char *arg;
+  arg = SCmd.next();
+  if (arg != NULL)
+  {
+    control_voltage = atof(arg);
+    if (control_voltage < V_MIN || control_voltage > V_MAX)
     {
-        control_voltage = atof(arg);
-        control_DAC.setVoltageOutput(V_REF - (control_voltage + V_VGND)); //shift to center-rail and invert
+      Serial.print("### Error: VCTRL must have (");
+      Serial.print(V_MIN,3);
+      Serial.print(" <= control_voltage <= ");
+      Serial.print(V_MAX,3);
+      Serial.print(") ###\n");
     }
-    else
-    {
-        Serial.println("### Error: VCTRL requires 1 argument (float control_voltage) ###");
-    }
+    control_DAC.setVoltageOutput(V_REF - (control_voltage + V_VGND)); //shift to center-rail and invert
+  }
+  else
+  {
+    Serial.println("### Error: VCTRL - requires 1 argument (float control_voltage) ###");
+  }
 }
 
 void doSweepCommand(){
-    char *arg;
-    arg = SCmd.next();
-    if (arg != NULL)
-    {
-        Serial.println("### Error: VSWEEP requires 0 arguments ###");
-    }
-    else
-    {
-       doSweep();
-    }
+  char *arg;
+  arg = SCmd.next();
+  if (arg != NULL)
+  {
+    Serial.println("### Error: VSWEEP requires 0 arguments ###");
+  }
+  else
+  {
+    doSweep();
+  }
 }
 
 void unrecognizedCommand(const char *command)
 {
-    Serial.println("### Error: command not recognized ###");
+  Serial.println("### Error: command not recognized ###");
 }
