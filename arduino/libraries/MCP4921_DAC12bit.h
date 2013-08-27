@@ -22,15 +22,17 @@ public:
                         float refVoltage
                        );
   //Configuration methods
-  void begin(); // Default
+  void begin(float initVoltage = 0.0); // Default
   void end();
   //Functionality methods
-  int setVoltageReference(float voltage);
-  int setVoltageOutput(float voltage);
+  int   setVoltageReference(float voltage);
+  int   setVoltageOutput(float voltage);
+  float getVoltageOutput();
 private:
   int _slaveSelectLowPin;
   int _ldacLowPin;
   float _refVoltage;
+  float _outputVoltage;
 };
 
 

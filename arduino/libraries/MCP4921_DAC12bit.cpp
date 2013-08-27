@@ -16,17 +16,19 @@ MCP4921_DAC12bitClass::MCP4921_DAC12bitClass(int slaveSelectLowPin,
   //initialize the pin mapping
   _slaveSelectLowPin = slaveSelectLowPin;
   _ldacLowPin        = ldacLowPin;
-  _refVoltage        = 0.0;
+  //initial voltage levels
   setVoltageReference(refVoltage);
 }
 
-void MCP4921_DAC12bitClass::begin() {
+void MCP4921_DAC12bitClass::begin(float initVoltage) {
   // Configure the Arduino pins
   pinMode(_slaveSelectLowPin, OUTPUT);
   pinMode(_ldacLowPin, OUTPUT);
-  
+
   digitalWrite(_slaveSelectLowPin, HIGH);  //comm. off
   digitalWrite(_ldacLowPin, HIGH);         //latch off
+  //initialize the voltage level
+  setVoltageOutput(initVoltage);
 }
 
 void MCP4921_DAC12bitClass::end() {
@@ -71,6 +73,11 @@ int MCP4921_DAC12bitClass::setVoltageOutput(float voltage){
   digitalWrite(_ldacLowPin, LOW);          //pull latch down
   delayMicroseconds(1);
   digitalWrite(_ldacLowPin, HIGH);         //pull latch up
-  
+  //cache the output voltage
+  _outputVoltage = voltage;
   return 0;
+}
+
+float MCP4921_DAC12bitClass::getVoltageOutput(){
+  return _outputVoltage;
 }
