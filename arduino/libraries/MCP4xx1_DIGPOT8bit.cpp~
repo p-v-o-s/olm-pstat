@@ -31,14 +31,6 @@ void MCP4xx1_DIGPOT8bitClass::end() {
   digitalWrite(_slaveSelectLowPin, LOW);
 }
 
-int MCP4xx1_DIGPOT8bitClass::readWiper0(unsigned int N){
-  return _wiper0Setting;
-}
-
-int MCP4xx1_DIGPOT8bitClass::readWiper1(unsigned int N){
-  return _wiper1Setting;
-}
-
 int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper0(unsigned int N){
   //Volatile Wiper 0 addr = 00h
   //Write command 00h
