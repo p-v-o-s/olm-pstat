@@ -6,6 +6,7 @@
 #include <SPI.h>
 #include <MCP4921_DAC12bit.h>
 #include <MCP320x_ADC12bit.h>
+#include <MCP4xx1_DIGPOT8bit.h>
 //3rd Party Libraries
 #include <SerialCommand.h>
 #include <TimerOne.h>      /*fast microsecond timer with interrupts*/
@@ -14,10 +15,11 @@
 #define BAUDRATE 9600
 
 #define FLOAT_PRECISION_DIGITS 9
-#define V_REF  3.29
+#define V_REF  3.297
 #define V_VGND V_REF/2.0
 #define V_INIT V_VGND
 #define R_CURRSENSE 1e4
+#define DIGPOT_N_INIT 128
 
 #define DELTA_V 0.05
 #define V_MIN (-V_REF/2.0 + DELTA_V)
@@ -39,29 +41,38 @@ MCP320x_ADC12bitClass sense_ADC(5,   //slaveSelectLowPin
                                 V_REF //reference voltage at full-scale
                               );
 
+//configure the DIGPOT chip
+MCP4xx1_DIGPOT8bitClass  offset_DIGPOT(A1,    //slaveSelectLowPin
+                                       100e3  //maxResistance
+                                      );
+
 
 void setup(){
   Serial.begin(BAUDRATE);
   
   //configure the serial commands
-  //SCmd.addCommand("*RST",    softwareReset);
-  //SCmd.addCommand("STATUS?", getStatusCommand);
-  //SCmd.addCommand("VCELL?",  getCellVoltageCommand);
-  //SCmd.addCommand("ICELL?",  getCellCurrentCommand);
- // SCmd.addCommand("VCTRL",   setControlVoltageCommand);
-  SCmd.addCommand("VSWEEP",  doSweepCommand);
-  SCmd.addCommand("VSWEEP_START",  setSweepStartCommand);
-  SCmd.addCommand("VSWEEP_END",    setSweepEndCommand);
-  SCmd.addCommand("VSWEEP_RAMP",   setSweepRampCommand);
-  SCmd.addCommand("VSWEEP_SAMPLE", setSweepSampleRateCommand);
-  //SCmd.addCommand("VSWEEP_CYCLES", setSweepCyclesCommand);
+  SCmd.addCommand("*RST",    softwareReset);
+  SCmd.addCommand("STATUS?", getStatusCommand);
+  SCmd.addCommand("VCELL?",  getCellVoltageCommand);
+  SCmd.addCommand("ICELL?",  getCellCurrentCommand); 
+
+  SCmd.addCommand("VCTRL",   setControlVoltageCommand);
+  SCmd.addCommand("VSWEEP!",       doSweepCommand); 
+  SCmd.addCommand("VSWEEP.START",  setSweepStartCommand);
+  SCmd.addCommand("VSWEEP.END",    setSweepEndCommand);
+  SCmd.addCommand("VSWEEP.RAMP",   setSweepRampCommand);
+  SCmd.addCommand("VSWEEP.SAMPLE", setSweepSampleRateCommand);
+  SCmd.addCommand("VSWEEP_CYCLES", setSweepCyclesCommand);
   
-  SCmd.setDefaultHandler(unrecognizedCommand);
+  //SCmd.addDefaultHandler(unrecognizedCommand);
   Serial.print("#<INIT>\n");
   //start up the SPI bus
   SPI.begin();
   SPI.setBitOrder(MSBFIRST);
   SPI.setDataMode(SPI_MODE0);
+  //configure the offset to the centerline
+  offset_DIGPOT.begin();
+  offset_DIGPOT.writeVolatileWiper0(DIGPOT_N_INIT);
   //start controlling the voltage supply
   control_DAC.begin(V_INIT);
   //start controlling the sampling
@@ -186,12 +197,12 @@ void doSweep(){
 //COMMAND HANDLER FUNCTIONS - called by the SCmd dispatcher
 
 void getStatusCommand(){
-  float control_voltage;          //referenced to V_VGND
-  float RE_voltage;               //referenced to power rails
-  float WEtoRE_voltage;           //WE voltage referenced to RE
-  float WE_current_sense_voltage; //voltage across current follower sense resistor, ref. to power rails
-  float WE_current;               //compute current into WE
-  float offset_voltage;           //referenced to power rails
+  float control_voltage;              //referenced to V_VGND
+  float RE_voltage;                   //referenced to power rails
+  float WEtoRE_voltage;               //WE voltage referenced to RE
+  float WE_current_sense_voltage;     //voltage across current follower sense resistor, ref. to power rails
+  float WE_current;                   //compute current into WE
+  float WE_current_sense_offset_voltage; //referenced to power rails
   char *arg;
   arg = SCmd.next();
   if (arg != NULL)
@@ -202,13 +213,13 @@ void getStatusCommand(){
   {
     control_voltage = control_DAC.getVoltageOutput() - V_VGND; //shift back from center-rail
     //read signals
-    RE_voltage               = sense_ADC.readSingle(0);
-    WE_current_sense_voltage = sense_ADC.readSingle(1);
-    offset_voltage           = sense_ADC.readSingle(2);
+    RE_voltage                      = sense_ADC.readSingle(0) - V_VGND;
+    WE_current_sense_voltage        = sense_ADC.readSingle(1) - V_VGND;
+    WE_current_sense_offset_voltage = sense_ADC.readSingle(2) - V_VGND;
     //convert to centerline voltage
-    WEtoRE_voltage = -(RE_voltage - V_VGND);
+    WEtoRE_voltage = -RE_voltage;
     //sesning current flows in opposite direction to current flowing into WE
-    WE_current     = -(WE_current_sense_voltage - V_VGND)/R_CURRSENSE;
+    WE_current     = -WE_current_sense_voltage/R_CURRSENSE;
     //format as YAML
     Serial.print("#<STATUS>\n");
     Serial.print("---\n");
@@ -221,8 +232,11 @@ void getStatusCommand(){
     Serial.print("WE_current: ");
     Serial.print(WE_current, FLOAT_PRECISION_DIGITS);
     Serial.print('\n');
-    Serial.print("offset_voltage: ");
-    Serial.print(offset_voltage, FLOAT_PRECISION_DIGITS);
+    Serial.print("WE_current_sense_voltage: ");
+    Serial.print(WE_current_sense_voltage, FLOAT_PRECISION_DIGITS);
+    Serial.print('\n');
+    Serial.print("WE_current_sense_offset_voltage: ");
+    Serial.print(WE_current_sense_offset_voltage, FLOAT_PRECISION_DIGITS);
     Serial.print('\n');
     Serial.print("#</STATUS>\n");
   }
