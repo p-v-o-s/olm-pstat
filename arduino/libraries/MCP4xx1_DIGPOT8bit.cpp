@@ -14,6 +14,7 @@ MCP4xx1_DIGPOT8bitClass::MCP4xx1_DIGPOT8bitClass(int slaveSelectLowPin,
                                                  float maxResistance){
   //initialize the pin mapping
   _slaveSelectLowPin = slaveSelectLowPin;
+  _wiperSetting      = -1;
   _maxResistance     = maxResistance;
 }
 
@@ -21,7 +22,7 @@ void MCP4xx1_DIGPOT8bitClass::begin() {
   // Configure the Arduino pins
   pinMode(_slaveSelectLowPin, OUTPUT);
   //comm. off
-  digitalWrite(_slaveSelectLowPin, HIGH);  
+  digitalWrite(_slaveSelectLowPin, HIGH);
 }
 
 void MCP4xx1_DIGPOT8bitClass::end() {
@@ -40,7 +41,7 @@ int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper0(unsigned int N){
   SPI.transfer(highByte(packet));          //send packet
   SPI.transfer(lowByte(packet));
   digitalWrite(_slaveSelectLowPin, HIGH);  //release chip select
-  
+  _wiperSetting = (int) N;
   return 0;
 }
 
@@ -49,7 +50,7 @@ int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper1(unsigned int N){
   //Write command 00h
   word packet = 0x0100;
   
-  packet |= 0x100 & N;  //place wiper setting in lower byte plus 1 bit
+  packet |= 0x01FF & N;  //place wiper setting in lower byte plus 1 bit
   //Serial.println(packet);
   digitalWrite(_slaveSelectLowPin, LOW);   //set chip as listener
   SPI.transfer(highByte(packet));          //send packet

@@ -26,6 +26,7 @@ public:
   int writeVolatileWiper1(unsigned int N);
 private:
   int   _slaveSelectLowPin;
+  int   _wiperSetting;
   float _maxResistance;
 };
 
