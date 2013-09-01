@@ -11,7 +11,8 @@
 #include "MCP4xx1_DIGPOT8bit.h"
 
 MCP4xx1_DIGPOT8bitClass::MCP4xx1_DIGPOT8bitClass(int slaveSelectLowPin,
-                                                 float maxResistance){
+                                                 float maxResistance)
+{
   //initialize the pin mapping
   _slaveSelectLowPin = slaveSelectLowPin;
   _wiper0Setting     = -1;
@@ -19,27 +20,32 @@ MCP4xx1_DIGPOT8bitClass::MCP4xx1_DIGPOT8bitClass(int slaveSelectLowPin,
   _maxResistance     = maxResistance;
 }
 
-void MCP4xx1_DIGPOT8bitClass::begin() {
+void MCP4xx1_DIGPOT8bitClass::begin()
+{
   // Configure the Arduino pins
   pinMode(_slaveSelectLowPin, OUTPUT);
   //comm. off
   digitalWrite(_slaveSelectLowPin, HIGH);
 }
 
-void MCP4xx1_DIGPOT8bitClass::end() {
+void MCP4xx1_DIGPOT8bitClass::end()
+{
   //turn all pins off
   digitalWrite(_slaveSelectLowPin, LOW);
 }
 
-int MCP4xx1_DIGPOT8bitClass::readWiper0(unsigned int N){
+int MCP4xx1_DIGPOT8bitClass::readWiper0()
+{
   return _wiper0Setting;
 }
 
-int MCP4xx1_DIGPOT8bitClass::readWiper1(unsigned int N){
+int MCP4xx1_DIGPOT8bitClass::readWiper1()
+{
   return _wiper1Setting;
 }
 
-int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper0(unsigned int N){
+int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper0(unsigned int N)
+{
   //Volatile Wiper 0 addr = 00h
   //Write command 00h
   word packet = 0x0000;
@@ -55,7 +61,8 @@ int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper0(unsigned int N){
   return 0;
 }
 
-int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper1(unsigned int N){
+int MCP4xx1_DIGPOT8bitClass::writeVolatileWiper1(unsigned int N)
+{
   //Volatile Wiper 1 addr = 01h
   //Write command 00h
   word packet = 0x0100;

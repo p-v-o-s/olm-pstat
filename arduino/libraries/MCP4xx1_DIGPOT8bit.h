@@ -22,6 +22,8 @@ public:
   void begin(); // Default
   void end();
   //Functionality methods
+  int readWiper0();
+  int readWiper1();
   int writeVolatileWiper0(unsigned int N);
   int writeVolatileWiper1(unsigned int N);
 private:
