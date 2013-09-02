@@ -9,7 +9,7 @@
 #include <SPI.h>
 #include <DG408_AnalogMUX8to1.h>
 
-//configure the DAC chip - on OLM port 4
+//configure the MUX chip - on OLM port 4
 DG408_AnalogMUX8to1Class MUX(10,  //addr0
                              A3, //addr1
                              7   //addr2
