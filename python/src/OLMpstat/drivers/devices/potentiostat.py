@@ -10,8 +10,7 @@ import numpy as np
 import yaml
 #package local
 ###############################################################################
-
-
+#Module Constants
 BAUDRATE = 115200
 EOL  = "\n"
 
