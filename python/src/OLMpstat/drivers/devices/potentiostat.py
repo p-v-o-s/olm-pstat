@@ -1,24 +1,34 @@
-import numpy as np
-import pylab
-import serial, yaml
+###############################################################################
+#Dependencies
+#standard python
 from StringIO import StringIO
+#Automat framework provided
+from automat.core.hwcontrol.devices.device import Device
+from automat.core.hwcontrol.communication.serial_mixin import SerialCommunicationsMixIn
+#3rd party hardware vendor, install from Internet
+import numpy as np
+import yaml
+#package local
+###############################################################################
+
 
 BAUDRATE = 115200
 EOL  = "\n"
 
-
-class Potentiostat(object):
-    def __init__(self, port, baudrate = BAUDRATE, eol = EOL, debug = False):
-        self._ser = serial.Serial(port, baudrate = baudrate)
-        self._eol = eol
-        self.debug = debug
+###############################################################################
+class Interface(Device, SerialCommunicationsMixIn):
+    def __init__(self, port, **kwargs):
+        debug = kwargs.pop('debug', False)
+        self._debug = debug
+        #initialize GPIB communication
+        SerialCommunicationsMixIn.__init__(self, port, **kwargs)
         
     def reset(self):
-        self._send_command("*RST")
+        self._send("*RST")
         self._read_until_tag("</INIT>")
         
     def get_status(self):
-        self._send_command("STATUS?")
+        self._send("STATUS?")
         resp = self._read_until_tag("</STATUS>")
         info = yaml.load(resp)
         return info
@@ -32,37 +42,31 @@ class Potentiostat(object):
         v_end   = float(v_end)
         v_rate  = float(v_rate)
         cycles  = int(cycles)
-        self._send_command("VSWEEP.START %f" % v_start)
-        self._send_command("VSWEEP.END %f" % v_end)
-        self._send_command("VSWEEP.RAMP %f" % v_rate)
-        self._send_command("VSWEEP.SAMPLE %f" % samp_rate)
-        self._send_command("VSWEEP.CYCLES %d" % cycles)
-        self._send_command('VSWEEP!')
+        self._send("VSWEEP.START %f" % v_start)
+        self._send("VSWEEP.END %f" % v_end)
+        self._send("VSWEEP.RAMP %f" % v_rate)
+        self._send("VSWEEP.SAMPLE %f" % samp_rate)
+        self._send("VSWEEP.CYCLES %d" % cycles)
+        self._send('VSWEEP!')
         data = self._read_until_tag('</VSWEEP>')
-        data = np.genfromtxt(StringIO(data), delimiter=",",comments='#')
+        data = np.genfromtxt(StringIO(data), delimiter=",", comments='#')
         return data
-    
-    def _send_command(self, cmd):
-        cmd = cmd.strip() + self._eol
-        if self.debug:
-            print "--> " + cmd,
-        self._ser.write(cmd)
-        
-    def _readline(self):
-        line = self._ser.readline().strip('\r\n')
-        if self.debug:
-            print "<-- " + line
-        return line
-        
-    def _exchange_command(self, cmd):
-        self._send_command(cmd)
-        resp = self._readline()
-        return resp
         
     def _read_until_tag(self, tag):
         buff = []
         while True:
-            line = self._readline()
+            line = self._read()
             buff.append(line)
             if line.find(tag) >= 0:
                 return "\n".join(buff)
+
+#------------------------------------------------------------------------------
+# INTERFACE CONFIGURATOR         
+def get_interface(port, **kwargs):
+    return Interface(port, **kwargs)
+    
+###############################################################################
+# TEST CODE
+###############################################################################
+if __name__ == "__main__":
+    iface = Interface(port = "/dev/ttyUSB0")
