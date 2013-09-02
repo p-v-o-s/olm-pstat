@@ -3,7 +3,7 @@ import pylab
 import serial, yaml
 from StringIO import StringIO
 
-BAUDRATE = 9600
+BAUDRATE = 115200
 EOL  = "\n"
 
 
@@ -32,12 +32,12 @@ class Potentiostat(object):
         v_end   = float(v_end)
         v_rate  = float(v_rate)
         cycles  = int(cycles)
-        self._send_command("VSWEEP_START %f" % v_start)
-        self._send_command("VSWEEP_END %f" % v_end)
-        self._send_command("VSWEEP_RAMP %f" % v_rate)
-        self._send_command("VSWEEP_SAMPLE %f" % samp_rate)
-        self._send_command("VSWEEP_CYCLES %d" % cycles)
-        self._send_command('VSWEEP')
+        self._send_command("VSWEEP.START %f" % v_start)
+        self._send_command("VSWEEP.END %f" % v_end)
+        self._send_command("VSWEEP.RAMP %f" % v_rate)
+        self._send_command("VSWEEP.SAMPLE %f" % samp_rate)
+        self._send_command("VSWEEP.CYCLES %d" % cycles)
+        self._send_command('VSWEEP!')
         data = self._read_until_tag('</VSWEEP>')
         data = np.genfromtxt(StringIO(data), delimiter=",",comments='#')
         return data
