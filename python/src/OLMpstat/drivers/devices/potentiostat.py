@@ -61,9 +61,10 @@ class Interface(Device, SerialCommunicationsMixIn):
                 return "\n".join(buff)
 
 #------------------------------------------------------------------------------
-# INTERFACE CONFIGURATOR         
-def get_interface(port, **kwargs):
-    return Interface(port, **kwargs)
+# INTERFACE CONFIGURATOR
+def get_interface(**kwargs):
+    port = kwargs.pop('port')
+    return Interface(port = port, **kwargs)
     
 ###############################################################################
 # TEST CODE
