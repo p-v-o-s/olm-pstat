@@ -18,11 +18,20 @@ PACKAGE_SOURCE_DIR = 'src'
 MAIN_PACKAGE_DIR   = 'OLMpstat'
 MAIN_PACKAGE_PATH  = os.path.abspath(os.sep.join((PACKAGE_SOURCE_DIR,MAIN_PACKAGE_DIR)))
 
+#dependencies
+INSTALL_REQUIRES = [
+                    'numpy >= 1.1.0',
+                    'matplotlib >= 0.98',
+                    'pyyaml',
+                    'pmw',
+                    'pyserial',
+                    ]
+
 #scripts and plugins
 ENTRY_POINTS =  { 'gui_scripts':     [
                                       'olm_pstat_control = OLMpstat.scripts.control:main',
                                      ],
-                 'console_scripts': [
+                  'console_scripts': [
                                       'olm_pstat_shell  = OLMpstat.scripts.shell:main',
                                       'olm_pstat_status = OLMpstat.scripts.status:main',
                                      ],
@@ -32,7 +41,7 @@ if __name__ == "__main__":
     from setuptools import setup, find_packages    
     setup(package_dir      = {'':PACKAGE_SOURCE_DIR},
           packages         = find_packages(PACKAGE_SOURCE_DIR),
-          
+          entry_points     = ENTRY_POINTS,
           #non-code files
           #package_data     =   {'': ['*.so']},
 
