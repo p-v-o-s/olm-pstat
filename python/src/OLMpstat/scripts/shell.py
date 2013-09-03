@@ -19,4 +19,3 @@ def main():
     app = Application()
     app.load(config_filepath = config_filepath)
     app.start_shell(msg = __BANNER)
-
