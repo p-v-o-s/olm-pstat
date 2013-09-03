@@ -4,12 +4,12 @@
 import time, argparse
 #Automat framework provided
 from automat.services.application import ApplicationBase
+from automat.services.errors import handleCrash
 #3rd party hardware vendor, install from Internet
 #package local
 import OLMpstat.pkg_info
-###########################################################################
+################################################################################
 #Module Constants
-PORT_DEFAULT  = "/dev/ttyUSB0"
 DELAY_DEFAULT = 1.0 #seconds
 
 ################################################################################
@@ -32,6 +32,7 @@ class Application(ApplicationBase):
         
 #-------------------------------------------------------------------------------
 # MAIN
+@handleCrash
 def main():
     #parse command line arguments
     parser = argparse.ArgumentParser()
