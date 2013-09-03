@@ -29,7 +29,7 @@ INSTALL_REQUIRES = [
 
 #scripts and plugins
 ENTRY_POINTS =  { 'gui_scripts':     [
-                                      'olm_pstat_control = OLMpstat.scripts.control:main',
+                                      'olm_pstat_control = OLMpstat.apps.control.main:main',
                                      ],
                   'console_scripts': [
                                       'olm_pstat_shell  = OLMpstat.scripts.shell:main',
