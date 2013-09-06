@@ -2,11 +2,19 @@
 #Dependencies
 #standard python
 import time
+#Standard or substitute
+OrderedDict = None
+try:
+    from collections import OrderedDict
+except ImportError:
+    from automat.substitutes.ordered_dict import OrderedDict
 #Automat framework provided
 from automat.services.application import ApplicationBase
 #3rd party hardware vendor, install from Internet
+import numpy as np
+#OLMpstat framework provided
+from OLMpstat.core.data_processing.voltage_sweep_dataset import VoltageSweepDataSet
 #package local
-import OLMpstat.pkg_info
 ################################################################################
 #Module Constants
 USED_CONTROLLERS = []
@@ -15,18 +23,42 @@ class Application(ApplicationBase):
     def __init__(self, skip_test = False, **kwargs):
         kwargs['used_controllers'] = USED_CONTROLLERS
         ApplicationBase.__init__(self, **kwargs)
-
-    def main_loop(self):
-        pstat = self._load_device('pstat')
-        try:
-            while True:
-                print "---"
-                info = pstat.get_status()
-                for key, val in info.items():
-                    print "%s: %s" % (key,val)
-                time.sleep(self.delay)
-        except KeyboardInterrupt:
-            pass
+        self._vsweep_dataset = VoltageSweepDataSet()
+        
+    def initialize(self, used_controllers = USED_CONTROLLERS):
+        ApplicationBase.initialize(self, used_controllers = used_controllers)
+        
+    def start_voltage_sweep(self,
+                            v_start,
+                            v_end,
+                            v_rate,
+                            samp_rate = 10.0,
+                            cycles = 1,
+                            current_range_level = 0,
+                            #blocking = True,
+                           ):
+        voltage_sweep = self._load_controller('voltage_sweep')
+        voltage_sweep.set_configuration(v_start = v_start,
+                                        v_end = v_end,
+                                        v_rate = v_rate,
+                                        samp_rate = samp_rate,
+                                        cycles = cycles,
+                                        current_range_level = current_range_level,
+                                        )
+        #creat new or overwrite the last dataset
+        self._vsweep_dataset = VoltageSweepDataSet()
+        voltage_sweep.start() #this should start a non-blocking thread
+        
+    def _append_vsweep_data_record(self,
+                                   control_voltage,
+                                   WEtoRE_voltage,
+                                   WE_current,
+                                  ):
+        self._vsweep_dataset.append_record(#this needs a sequence
+                                           (control_voltage,
+                                            WEtoRE_voltage,
+                                            WE_current)
+                                          )
 
 #import numpy as np
 #import pylab

@@ -20,6 +20,7 @@ class Application(ApplicationBase):
 
     def main_loop(self):
         pstat = self._load_device('pstat')
+        pstat.reset()
         try:
             while True:
                 print "---"

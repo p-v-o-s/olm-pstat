@@ -23,21 +23,42 @@ from automat.system_tools.daemonize          import ignore_KeyboardInterrupt, no
 #OLMpstat framework provided
 from OLMpstat.core.plotting.templates        import CurrentVoltagePlot
 #application local
+from vsweep_settings_dialog import VoltageSweepSettingsDialog
 ###############################################################################
 # Module Constants
+LOOP_DELAY = 100 #milliseconds
+WAIT_DELAY = 100 #milliseconds
+VSWEEP_LOOP_DELAY = 1 #milliseconds
+
 WINDOW_TITLE      = "OLMpstat Control"
 WINDOW_TO_SCREENWIDTH_RATIO  = 0.9
 WINDOW_TO_SCREENHEIGHT_RATIO = 0.9
-WAIT_DELAY        = 100 #milliseconds
-TEXT_BUFFER_SIZE  = 10*2**20 #ten megabytes
-CV_FIGSIZE    = (6,5) #inches
-CV_PLOT_STYLE = 'r-'
-LOOP_DELAY        = 100 #milliseconds
 
 BUTTON_WIDTH = 20
 SECTION_PADY = 2
+
+TEXTBOX_WIDTH        = 20  #characters
+TEXTBOX_BUFFER_SIZE  = 10*2**20 #ten megabytes
+
 CONFIRMATION_TEXT_DISPLAY_TEXT_HEIGHT = 40
 CONFIRMATION_TEXT_DISPLAY_TEXT_WIDTH  = 80
+
+CV_PLOT_TITLE = "Current vs. Voltage"
+CV_PLOT_FIGSIZE    = (6,5) #inches
+CV_PLOT_STYLES = ['r.-',
+                  'g.-',
+                  'b.-',
+                  'c.-',
+                  'y.-',
+                  'm.-',
+                  'k.-',
+                  'r.--',
+                  'g.--',
+                  'b.--',
+                  'c.--',
+                  'y.--',
+                  'm.--',
+                  'k.--']
 
 #Font Styles
 FIELD_LABEL_FONT      = "Courier 10 normal"
@@ -50,8 +71,17 @@ SETTINGS_FILEPATH = os.path.expanduser("~/.olm_pstat_control_settings.db")
 #replacement dialog box, since Pmw.MessageDialog appears to mysteriously segfault
 import Dialog
 
-def launch_MessageDialog(title, message_text, buttons = ('OK',), bitmap='', default=0):
-    d = tk.Dialog.Dialog(title=title, text = message_text, bitmap=bitmap, default=default, strings=buttons)
+def launch_MessageDialog(title,
+                         message_text,
+                         buttons = ('OK',),
+                         bitmap = '',
+                         default = 0,
+                         ):
+    d = tk.Dialog.Dialog(title = title,
+                         text = message_text,
+                         bitmap = bitmap,
+                         default = default,
+                         strings = buttons)
     return buttons[d.num]
       
 ###############################################################################
@@ -66,6 +96,9 @@ class GUI(GUIBase):
         x = (sw - w)/2
         y = (sh - h)/2
         self._win.geometry("%dx%d+%d+%d" % (w,h,x,y))
+        self._cv_plot_Xs = []
+        self._cv_plot_Ys = []
+        self._cv_plot_labels = []
 
     def build_widgets(self):
         #FIXME bind some debugging keystrokes to the window
@@ -75,11 +108,11 @@ class GUI(GUIBase):
         left_panel = tk.Frame(self._win)
         #voltage sweep controls
         tk.Label(left_panel, text="Voltage Sweep Controls:", font = HEADING_LABEL_FONT).pack(side='top',anchor="w")
-        self.change_vsweep_settings_button = tk.Button(left_panel,
-                                                       text    = 'Change Settings',
-                                                       command = self.change_vsweep_settings,
-                                                       width   = BUTTON_WIDTH)
-        self.change_vsweep_settings_button.pack(side='top', anchor="sw")
+        self.vsweep_settings_button = tk.Button(left_panel,
+                                                text    = 'Change Settings',
+                                                command = self.change_vsweep_settings,
+                                                width   = BUTTON_WIDTH)
+        self.vsweep_settings_button.pack(side='top', anchor="sw")
         self.vsweep_once_button = tk.Button(left_panel,
                                             text   = 'Run Once',
                                             command = self.vsweep_once,
@@ -98,8 +131,8 @@ class GUI(GUIBase):
         self.vsweep_stop_button.pack(side='top', anchor="nw")
        
         #build the capture settings dialog
-#        self.vsweep_settings_dialog = VoltageSweepSettingsDialog(self.win)
-#        self.vsweep_settings_dialog.withdraw()
+        self.vsweep_settings_dialog = VoltageSweepSettingsDialog(self._win)
+        self.vsweep_settings_dialog.withdraw()
 
         #finish the left panel
         left_panel.pack(fill='y',expand='no',side='left', padx = 10)
@@ -114,11 +147,14 @@ class GUI(GUIBase):
         nb.add(tab1, text = "Current vs. Voltage")
         #create an tk embedded figure for the current vs. voltage display
         self.cv_plot_template = CurrentVoltagePlot()
-        self.cv_plot_figure_widget = EmbeddedFigure(tab1, figsize = CV_FIGSIZE)
+        self.cv_plot_template.configure(title = CV_PLOT_TITLE)
+        self.cv_plot_figure_widget = EmbeddedFigure(tab1, figsize = CV_PLOT_FIGSIZE)
         self.cv_plot_figure_widget.pack(side='top',fill='both', expand='yes')
-        self._update_cv_plot()
-        #self.replot_raw_spectrum_button = tk.Button(tab1,text='Replot Spectrum',command = self.replot_raw_spectrum, state='disabled', width = BUTTON_WIDTH)
-        #self.replot_raw_spectrum_button.pack(side='left',anchor="sw")
+        self._update_cv_plot()  #make an empty plot
+        self.replot_cv_button = tk.Button(tab1,text='Replot',command = self.replot_cv, state='normal', width = BUTTON_WIDTH)
+        self.replot_cv_button.pack(side='left',anchor="sw")
+        self.clear_cv_button = tk.Button(tab1,text='Clear',command = self.clear_data, state='normal', width = BUTTON_WIDTH)
+        self.clear_cv_button.pack(side='left',anchor="sw")
         self.export_data_button = tk.Button(tab1,
                                             text    ='Export Data',
                                             command = self.export_data,
@@ -140,7 +176,10 @@ class GUI(GUIBase):
         # Events text display
         tk.Label(right_panel, pady = SECTION_PADY).pack(side='top',fill='x', anchor="nw")
         tk.Label(right_panel, text="Events Monitoring:", font = HEADING_LABEL_FONT).pack(side='top',anchor="w")
-        self.text_display  = TextDisplayBox(right_panel,text_height=15, buffer_size = TEXT_BUFFER_SIZE)
+        self.text_display  = TextDisplayBox(right_panel,
+                                            text_width  = TEXTBOX_WIDTH,
+                                            buffer_size = TEXTBOX_BUFFER_SIZE,
+                                            )
         self.text_display.pack(side='top',fill='both',expand='yes')
         #finish building the right panel
         right_panel.pack(fill='both', expand='yes',side='right', padx = 10)
@@ -190,9 +229,9 @@ class GUI(GUIBase):
         self.vsweep_once_button.configure(state="disabled")
         
     def enable_control_buttons(self):
-        self.vsweep_capture_settings_button.configure(state="normal")
+        self.vsweep_settings_button.configure(state="normal")
         self.vsweep_continually_button.configure(state="normal")
-        #self.capture_stop_button.configure(state="normal")
+        #self.vsweep_stop_button.configure(state="normal")
         self.vsweep_once_button.configure(state="normal")
 
     def change_vsweep_settings(self):
@@ -206,27 +245,61 @@ class GUI(GUIBase):
         self.disable_control_buttons()
         self.vsweep_stop_button.config(state='normal')
         #get parameters
-        #frametype         = self.capture_settings_dialog.frametype_var.get()
-        #exposure_time     = int(self.capture_settings_dialog.form['exposure_time'])
+        v_start   = float(self.vsweep_settings_dialog.form['v_start'])
+        v_end     = float(self.vsweep_settings_dialog.form['v_end'])
+        v_rate    = float(self.vsweep_settings_dialog.form['v_rate'])
+        samp_rate = float(self.vsweep_settings_dialog.form['samp_rate'])
+        cycles    = int(self.vsweep_settings_dialog.form['cycles'])
+        current_range_level = self.vsweep_settings_dialog.current_range_level_var.get()
+        current_range_level, _ = current_range_level.split(",")
+        current_range_level = int(current_range_level)
         self._app.print_comment("Running a voltage sweep:")
-        #self.app.print_comment("\texposing for %d milliseconds..." % (exposure_time,))
-        #self.app.voltage_sweep()
+        self._app.print_comment("    v_start: %0.2f" % (v_start,))
+        self._app.print_comment("    v_end: %0.2f" % (v_end,))
+        self._app.print_comment("    v_rate: %0.2f" % (v_rate,))
+        self._app.print_comment("    samp_rate: %0.2f" % (samp_rate,))
+        self._app.print_comment("    cycles: %0.2f" % (cycles,))
+        #start the voltage sweep, SHOULD NOT BLOCK!
+        self._app.start_voltage_sweep(v_start   = v_start,
+                                      v_end     = v_end,
+                                      v_rate    = v_rate,
+                                      samp_rate = samp_rate,
+                                      cycles    = cycles,
+                                      current_range_level = current_range_level,
+                                     )
         self._win.after(LOOP_DELAY, self._wait_on_vsweep_loop)
         
     def _wait_on_vsweep_loop(self):
-        voltage_sweep = self._app.load_controller('voltage_sweep')
+        voltage_sweep = self._app._load_controller('voltage_sweep')
         #read out all pending events
         while not voltage_sweep.event_queue.empty():
             event, info = voltage_sweep.event_queue.get()
             self.print_event(event,info)
-#            if  event == "FILTER_SWITCHER_STARTED":
-#                #filter is changing like in the 'opaque' frametype
-#                self._update_filter_status(None)
+            if  event == "VOLTAGE_SWEEP_SAMPLE":
+                self._app._append_vsweep_data_record(info['control_voltage'],
+                                                     info['WEtoRE_voltage'],
+                                                     info['WE_current'],
+                                                    )
+                #use new data to update the plot
+                V1 = self._app._vsweep_dataset['control_voltage']
+                V2 = self._app._vsweep_dataset['WEtoRE_voltage']
+                I  = self._app._vsweep_dataset['WE_current']
+                self._update_cv_plot(X_now = V2, Y_now = I)
         if voltage_sweep.thread_isAlive():
             #reschedule loop
-            self._win.after(LOOP_DELAY,self._wait_on_vsweep_loop)
+            self._win.after(VSWEEP_LOOP_DELAY,self._wait_on_vsweep_loop)
         else:
             #finish up
+            #cache the data for the plot
+            V1 = self._app._vsweep_dataset['control_voltage']
+            V2 = self._app._vsweep_dataset['WEtoRE_voltage']
+            I  = self._app._vsweep_dataset['WE_current']
+            self._cv_plot_Xs.append(V2)
+            self._cv_plot_Ys.append(I)
+            #styles = []
+            new_label = "Trial %d" % (len(self._cv_plot_labels) + 1,)
+            self._cv_plot_labels.append(new_label)
+            self.replot_cv()
             #self.not_busy()
             #re-enable all the buttons, except the stop button
             self.enable_control_buttons()
@@ -263,24 +336,8 @@ class GUI(GUIBase):
             event, info = voltage_sweep.event_queue.get()
             self.print_event(event,info)
 #            if   event == "FILTER_SWITCHER_STARTED":
-#                #filter is changing like in the 'opaque' frametype
-#                self._update_filter_status(None)
-#            elif event == "FILTER_SWITCHER_COMPLETED":
-#               md = self.app.query_filter_status()
-#               self._update_filter_status(md)
-#            elif event == "IMAGE_CAPTURE_LOOP_SLEEPING":
-#                time_left = info['time_left']
-#                self.capture_time_left_field.setvalue("%d" % round(time_left))
 #            elif event == "IMAGE_CAPTURE_EXPOSURE_COMPLETED":
 #                #grab the image, comput the spectrum, then update them
-#                I = info['image_array']
-#                S = self.app.compute_raw_spectrum(I)
-#                B = self.app.get_background_spectrum()
-#                self._update_raw_spectrum_plot(S=S,B=B)
-#                self._update_processed_spectrum_plot(S=S,B=B)
-#                self._update_image(I)
-#                self.replot_raw_spectrum_button.config(state='normal') #data can now be replotted
-#                self.save_image_button.config(state='normal')      #data can now be exported
         #reschedule loop
         if voltage_sweep.thread_isAlive():  #wait for the capture to finish, important!
             self._vsweep_after_id = self._win.after(LOOP_DELAY, self._vsweep_continually_loop)
@@ -306,10 +363,20 @@ class GUI(GUIBase):
         self._vsweep_mode = None
     
     def replot_cv(self):
+        voltage_sweep = self._app._load_controller('voltage_sweep')
+        figure = self.cv_plot_figure_widget.get_figure()
+        figure.clear()
         self.cv_plot_template._has_been_plotted = False
-#        S = self.app.get_raw_spectrum()
-#        B = self.app.get_background_spectrum()
-#        self._update_cv_plot(S=S,B=B)
+        #check to see if the current trial is still running
+        if voltage_sweep.thread_isAlive():
+            #if so pass in the current trial data
+            V1 = self._app._vsweep_dataset['control_voltage']
+            V2 = self._app._vsweep_dataset['WEtoRE_voltage']
+            I  = self._app._vsweep_dataset['WE_current']
+            self._update_cv_plot(X_now = V2, Y_now = I)
+        else:
+            #otherwise just the completed data sets (i.e., avoid redundancy of last set)
+            self._update_cv_plot()
 
     def export_data(self):
         self._app.print_comment("Exporting data...")
@@ -330,52 +397,50 @@ class GUI(GUIBase):
         if filename:
             self._app.export_data(filename)
         self._app.print_comment("finished")
+        
+    def clear_data(self):
+        self._cv_plot_Xs = []
+        self._cv_plot_Ys = []
+        self._cv_plot_labels = []
+        self.replot_cv()
     
-    def _update_cv_plot(self, D = None):
+    def _update_cv_plot(self, X_now = None, Y_now = None):
         figure        = self.cv_plot_figure_widget.get_figure()
         plot_template = self.cv_plot_template
-        title = "Current vs. Voltage"
-        self.cv_plot_template.configure(title=title)
-        if (not plot_template.has_been_plotted()):
+        
+        if not plot_template.has_been_plotted():
             self._app.print_comment("Plotting the Current vs. Voltage.")
-            figure.clear()
-            Xs = []
-            Ys = []
-            styles = []
-            labels = []
-            if D is None:
-                D = np.array([])
-                Xs.append(np.arange(len(D)))
-                Ys.append(D)
-                styles.append(CV_PLOT_STYLE)
-                labels.append("None")
+            Xs = self._cv_plot_Xs[:] #make copy to not mutate!
+            if not X_now is None:
+                Xs.append(X_now)
             else:
-                #get some metadata for label formatting
-#                frametype = self.app.metadata['frametype']
-#                exptime   = int(self.app.metadata['exposure_time'])
-#                label     = "raw-%s, exptime = %d ms" % (frametype, exptime)
-                Xs.append(np.arange(len(D)))
-                Ys.append(D)
-                styles.append(CV_PLOT_STYLE)
-                labels.append(label)
-            plot_template.plot(Xs, Ys, styles = styles, labels = labels, figure = figure)
+                Xs.append([])
+            Ys = self._cv_plot_Ys[:] #make copy to not mutate!
+            if not Y_now is None:
+                Ys.append(Y_now)
+            else:
+                Ys.append([])
+            #styles = CV_PLOT_STYLES
+            labels = self._cv_plot_labels + ['Current Trial']
+            plot_template.plot(Xs, Ys,
+                               #styles = styles,
+                               labels = labels,
+                               figure = figure
+                              )
             self.cv_plot_figure_widget.update()
         else:
+            self._app.print_comment("Updating Current vs. Voltage plot.")
             #get the plot line from the figure FIXME is there an easier way?
             axis = figure.axes[0]
-            line0 = axis.lines[0]
-            line0.set_ydata(S)
-#            #get some metadata for label formatting
-#            frametype = self.app.metadata['frametype']
-#            exptime   = int(self.app.metadata['exposure_time'])
-#            label     = "raw-%s, exptime = %d ms" % (frametype, exptime)
-            line0.set_label(label)
-            try:
-                line1 = axis.lines[1]
-                line1.set_label("background")
-            except IndexError:
-                pass
-            axis.legend()
-            self._app.print_comment("Updating Current vs. Voltage plot: %s" % label)
-            #figure.axes[0].set_title(title)
+            last_line = axis.lines[-1]
+            if not X_now is None:
+                last_line.set_xdata(X_now)
+            if not Y_now is None:
+                last_line.set_ydata(Y_now)
             self.cv_plot_figure_widget.update()
+#            #FIXME cook up a label
+#            #axis.legend()
+#            #self._app.print_comment("Updating Current vs. Voltage plot: %s" % label)
+#            self._app.print_comment("Updating Current vs. Voltage plot.")
+#            #figure.axes[0].set_title(title)
+#            self.cv_plot_figure_widget.update()

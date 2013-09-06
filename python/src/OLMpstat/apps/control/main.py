@@ -3,6 +3,8 @@
 #standard python
 #Automat framework provided
 from automat.services.errors import handleCrash
+#OLMpstat framework provided
+import OLMpstat.pkg_info
 #3rd party hardware vendor, install from Internet
 ################################################################################
 #Module Constants
@@ -41,6 +43,9 @@ def main():
     app = Application(skip_test = args.skip_test,
                       ignore_device_errors = args.ignore_device_errors,
                      )
+    #parse and loads the configuration objects
+    app.load(config_filepath = OLMpstat.pkg_info.platform['config_filepath'])
+    #initialize the controllers
     app.initialize()
     if args.detach:
         #detach the process from its controlling terminal

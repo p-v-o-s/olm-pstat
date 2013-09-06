@@ -9,6 +9,8 @@ __BANNER  = ['*'*80,
              '*'*80]
 __BANNER  = '\n'.join(__BANNER)
 
+PYLAB_MODE = True
+
 class Application(ShellApplication):
     pass #FIXME can overload generic behaviors here
 
@@ -18,4 +20,4 @@ def main():
     config_filepath = OLMpstat.pkg_info.platform['config_filepath']
     app = Application()
     app.load(config_filepath = config_filepath)
-    app.start_shell(msg = __BANNER)
+    app.start_shell(msg = __BANNER, pylab_mode = PYLAB_MODE)

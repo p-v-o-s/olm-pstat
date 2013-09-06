@@ -10,7 +10,20 @@ from automat.core.plotting.plots import MultiPlot
 TITLE  = 'Current vs. Voltage'
 XLABEL = r'Voltage [V]'
 YLABEL = r'Current [mA]'
-STYLES = ['r-','g-','b-','c-','y-','m-','k-','r--','g--','b--','c--','y--','m--','k--']
+STYLES = ['r.-',
+          'g.-',
+          'b.-',
+          'c.-',
+          'y.-',
+          'm.-',
+          'k.-',
+          'r.--',
+          'g.--',
+          'b.--',
+          'c.--',
+          'y.--',
+          'm.--',
+          'k.--']
 YTICKS_POWERLIMITS = (-2,3)
 USE_LEGEND = True
 

@@ -18,10 +18,14 @@ EOL  = "\n"
 class Interface(Device, SerialCommunicationsMixIn):
     def __init__(self, port, **kwargs):
         debug = kwargs.pop('debug', False)
-        self._debug = debug
         #initialize GPIB communication
-        SerialCommunicationsMixIn.__init__(self, port, **kwargs)
-        
+        SerialCommunicationsMixIn.__init__(self,
+                                           port = port,
+                                           debug = debug,
+                                           **kwargs)
+    def initialize(self):
+        self.reset()
+    
     def reset(self):
         self._send("*RST")
         self._read_until_tag("</INIT>")
@@ -32,24 +36,40 @@ class Interface(Device, SerialCommunicationsMixIn):
         info = yaml.load(resp)
         return info
         
+    def set_control_voltage(self, v):
+        cmd = "VCTRL %f" % v
+        self._send(cmd)
+        
+    def measure_cell_current(self):
+        resp = self._exchange("ICELL?")
+        
     def do_voltage_sweep(self,
                          v_start, v_end, v_rate,
                          samp_rate = 10.0,
                          cycles = 1,
+                         current_range_level = None,
+                         blocking = True,
                         ):
+        """ Start a voltage sweep on the controller.  Optionally according
+            blocking = True, then read all the data, and parse into a numpy
+            array.
+        """
         v_start = float(v_start)
         v_end   = float(v_end)
         v_rate  = float(v_rate)
         cycles  = int(cycles)
+        if not current_range_level is None:
+            self._send("IRANGE.LEVEL %d" % current_range_level)
         self._send("VSWEEP.START %f" % v_start)
         self._send("VSWEEP.END %f" % v_end)
         self._send("VSWEEP.RAMP %f" % v_rate)
         self._send("VSWEEP.SAMPLE %f" % samp_rate)
         self._send("VSWEEP.CYCLES %d" % cycles)
         self._send('VSWEEP!')
-        data = self._read_until_tag('</VSWEEP>')
-        data = np.genfromtxt(StringIO(data), delimiter=",", comments='#')
-        return data
+        if blocking:
+            data = self._read_until_tag('</VSWEEP>')
+            data = np.genfromtxt(StringIO(data), delimiter=",", comments='#')
+            return data
         
     def _read_until_tag(self, tag):
         buff = []
@@ -63,7 +83,14 @@ class Interface(Device, SerialCommunicationsMixIn):
 # INTERFACE CONFIGURATOR
 def get_interface(**kwargs):
     port = kwargs.pop('port')
-    return Interface(port = port, **kwargs)
+    debug = kwargs.pop('debug', 'False')
+    if debug == 'True':
+        debug = True
+    elif debug == 'False':
+        debug = False
+    else:
+        raise ValueError("'debug' parameter must be either 'True' or 'False'")
+    return Interface(port = port, debug = debug, **kwargs)
     
 ###############################################################################
 # TEST CODE
