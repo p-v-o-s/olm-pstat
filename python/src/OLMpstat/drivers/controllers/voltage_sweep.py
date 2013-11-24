@@ -40,8 +40,8 @@ class Interface(Controller):
         Controller.__init__(self, **kwargs)
             
     def shutdown(self):
-        pass
-            
+        pstat = self.devices['pstat']
+        pstat.shutdown()
              
     def main(self):
         try:
@@ -60,27 +60,13 @@ class Interface(Controller):
                     info['timestamp'] = time.time()
                     self._send_event("VOLTAGE_SWEEP_LOOP_STOPPED",info)
                     return
-#                # SLEEP for a bit ----------------------------------------
-#                #start marking time
-#                t0 = time.time()
-#                while True:
-#                    self.sleep(SLEEP_TIME)
-#                    self._thread_abort_breakout_point()
-#                    t = time.time()
-#                    dt = t - t0
-#                    time_left = delay - dt
-#                    if time_left <= 0:
-#                        break
-#                    info = OrderedDict()
-#                    info['timestamp'] = time.time()
-#                    info['time_left'] = time_left
-#                    self._send_event("VOLTAGE_SWEEP_LOOP_SLEEPING",info)
                 # SWEEP & SAMPLE -----------------------------------------
                 self.do_sweep(cycle_index = i)
                 i += 1
                 # REPEAT
         except (AbortInterrupt, Exception), exc:
             # END ABNORMALLY ---------------------------------------------
+            self.abort_sweep()
             info = OrderedDict()
             info['timestamp'] = time.time()
             info['exception'] = exc
@@ -120,6 +106,7 @@ class Interface(Controller):
         pstat._read_until_tag('<CSV_DATA>')
         #parse each line into an event as it comes in
         while True:
+            self._thread_abort_breakout_point()
             line = pstat._read()
             if not line.startswith(COMMENT_SYMBOL):  #data record
                 control_voltage, WEtoRE_voltage, WE_current = line.split(CSV_DELIMITER)
@@ -139,6 +126,13 @@ class Interface(Controller):
                 info['timestamp'] = time.time()
                 info['msg']       = line
                 self._send_event("VOLTAGE_SWEEP_COMMENT", info)
+                
+    def abort_sweep(self, cycle_index = None):
+        pstat = self.devices['pstat']
+        pstat.abort_sweep()
+        info = OrderedDict()
+        info['timestamp'] = time.time()
+        self._send_event("VOLTAGE_SWEEP_ABORT",info)
    
 #------------------------------------------------------------------------------
 # INTERFACE CONFIGURATOR
