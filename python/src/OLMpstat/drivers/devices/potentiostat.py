@@ -12,7 +12,7 @@ import yaml
 ###############################################################################
 #Module Constants
 BAUDRATE = 115200
-EOL  = "\n"
+DEFAULT_EOL  = "\n"
 
 ###############################################################################
 class Interface(Device, SerialCommunicationsMixIn):
@@ -22,13 +22,26 @@ class Interface(Device, SerialCommunicationsMixIn):
         SerialCommunicationsMixIn.__init__(self,
                                            port = port,
                                            debug = debug,
+                                           EOL = DEFAULT_EOL,
                                            **kwargs)
+        #state attributes
+        self._vsweep_running = False
+        
     def initialize(self):
         self.reset()
+        
+    def shutdown(self):
+        self.abort_sweep()
     
     def reset(self):
+        self.abort_sweep()
         self._send("*RST")
         self._read_until_tag("</INIT>")
+        
+    def abort_sweep(self):
+        if self._vsweep_running:
+            self._send("ABORT!")
+            self._vsweep_running = False
         
     def get_status(self):
         self._send("STATUS?")
@@ -66,9 +79,11 @@ class Interface(Device, SerialCommunicationsMixIn):
         self._send("VSWEEP.SAMPLE %f" % samp_rate)
         self._send("VSWEEP.CYCLES %d" % cycles)
         self._send('VSWEEP!')
+        self._vsweep_running = True
         if blocking:
             data = self._read_until_tag('</VSWEEP>')
             data = np.genfromtxt(StringIO(data), delimiter=",", comments='#')
+            self._vsweep_running = False
             return data
         
     def _read_until_tag(self, tag):
