@@ -99,6 +99,8 @@ class GUI(GUIBase):
         self._cv_plot_Xs = []
         self._cv_plot_Ys = []
         self._cv_plot_labels = []
+        self._vsweep_mode = None
+        self._vsweep_stop = False
 
     def build_widgets(self):
         #FIXME bind some debugging keystrokes to the window
@@ -115,12 +117,12 @@ class GUI(GUIBase):
         self.vsweep_settings_button.pack(side='top', anchor="sw")
         self.vsweep_once_button = tk.Button(left_panel,
                                             text   = 'Run Once',
-                                            command = self.vsweep_once,
+                                            command = lambda: self.do_vsweep(mode = 'once'),
                                             width   = BUTTON_WIDTH)
         self.vsweep_once_button.pack(side='top', anchor="nw")
         self.vsweep_continually_button = tk.Button(left_panel,
                                                    text    = 'Run Continually',
-                                                   command = self.vsweep_continually,
+                                                   command = lambda: self.do_vsweep(mode = 'continual'),
                                                    width   = BUTTON_WIDTH)
         self.vsweep_continually_button.pack(side='top', anchor="nw")
         self.vsweep_stop_button = tk.Button(left_panel,
@@ -153,7 +155,7 @@ class GUI(GUIBase):
         self._update_cv_plot()  #make an empty plot
         self.replot_cv_button = tk.Button(tab1,text='Replot',command = self.replot_cv, state='normal', width = BUTTON_WIDTH)
         self.replot_cv_button.pack(side='left',anchor="sw")
-        self.clear_cv_button = tk.Button(tab1,text='Clear',command = self.clear_data, state='normal', width = BUTTON_WIDTH)
+        self.clear_cv_button  = tk.Button(tab1,text='Clear',command = self.clear_data, state='normal', width = BUTTON_WIDTH)
         self.clear_cv_button.pack(side='left',anchor="sw")
         self.export_data_button = tk.Button(tab1,
                                             text    ='Export Data',
@@ -168,8 +170,8 @@ class GUI(GUIBase):
         right_panel = tk.Frame(self._win)
         
         #Status variable display
-        tk.Label(right_panel, pady = SECTION_PADY).pack(side='top',fill='x', anchor="nw")
-        tk.Label(right_panel, text="Status:", font = HEADING_LABEL_FONT).pack(side='top',anchor="w")
+        #tk.Label(right_panel, pady = SECTION_PADY).pack(side='top',fill='x', anchor="nw")
+        #tk.Label(right_panel, text="Status:", font = HEADING_LABEL_FONT).pack(side='top',anchor="w")
         #self.condition_fields = ConditionFields(right_panel)
         #self.condition_fields.pack(side='top', anchor="w", expand='no')
         
@@ -183,14 +185,21 @@ class GUI(GUIBase):
         self.text_display.pack(side='top',fill='both',expand='yes')
         #finish building the right panel
         right_panel.pack(fill='both', expand='yes',side='right', padx = 10)
-         
+    
+    def close(self):
+        self.cache_settings()
+        GUIBase.close(self)
 
     def load_settings(self):
         if os.path.exists(SETTINGS_FILEPATH):
             self._app.print_comment("loading from settings file '%s'" % SETTINGS_FILEPATH)
             settings = shelve.open(SETTINGS_FILEPATH)
-            #self.vsweep_settings_dialog.frametype_var.set(FRAMETYPE_DEFAULT) #always load this as default
-            #self.vsweep_settings_dialog.form['exposure_time']     = settings.get('exposure_time'    , EXPOSURE_TIME_DEFAULT)
+            self.vsweep_settings_dialog.form['v_start']   = settings.get('v_start', 0.0)
+            self.vsweep_settings_dialog.form['v_end']     = settings.get('v_end', 1.5)
+            self.vsweep_settings_dialog.form['v_rate']    = settings.get('v_rate', 0.25)
+            self.vsweep_settings_dialog.form['samp_rate'] = settings.get('samp_rate', 10.0)
+            self.vsweep_settings_dialog.form['cycles']    = settings.get('cycles', 1)
+            self.vsweep_settings_dialog.current_range_level_var.set(settings.get('current_range_level', 0))
             settings.close()
         else:
             self._app.print_comment("failed to find settings file '%s'" % SETTINGS_FILEPATH)
@@ -198,7 +207,12 @@ class GUI(GUIBase):
     def cache_settings(self):
         self._app.print_comment("caching to settings file '%s'" % SETTINGS_FILEPATH)
         settings = shelve.open(SETTINGS_FILEPATH)
-        #settings['exposure_time']     = self.vsweep_settings_dialog.form['exposure_time']
+        settings['v_start']   = self.vsweep_settings_dialog.form['v_start']
+        settings['v_end']     = self.vsweep_settings_dialog.form['v_end']
+        settings['v_rate']    = self.vsweep_settings_dialog.form['v_rate']
+        settings['samp_rate'] = self.vsweep_settings_dialog.form['samp_rate']
+        settings['cycles']    = self.vsweep_settings_dialog.form['cycles']
+        settings['current_range_level'] = self.vsweep_settings_dialog.current_range_level_var.get()
         settings.close()
     
     def busy(self):
@@ -239,11 +253,15 @@ class GUI(GUIBase):
         if choice == "OK":
             self._app.print_comment("changing voltage sweep settings...")
 
-    def vsweep_once(self):
+    def do_vsweep(self, mode = 'once'):
+        self._vsweep_mode = mode
         #disable all the control buttons, except the stop button
-        self.vsweep_once_button.config(bg='green', relief='sunken')
         self.disable_control_buttons()
         self.vsweep_stop_button.config(state='normal')
+        if mode == 'once':
+            self.vsweep_once_button.config(bg='green', relief='sunken')
+        elif mode == 'continual':
+            self.vsweep_continually_button.config(state='disabled', bg='green', relief="sunken")
         #get parameters
         v_start   = float(self.vsweep_settings_dialog.form['v_start'])
         v_end     = float(self.vsweep_settings_dialog.form['v_end'])
@@ -287,80 +305,49 @@ class GUI(GUIBase):
                 self._update_cv_plot(X_now = V2, Y_now = I)
         if voltage_sweep.thread_isAlive():
             #reschedule loop
-            self._win.after(VSWEEP_LOOP_DELAY,self._wait_on_vsweep_loop)
-        else:
-            #finish up
+            self._vsweep_after_id = self._win.after(VSWEEP_LOOP_DELAY,self._wait_on_vsweep_loop)
+        else: #cycle is finished
             #cache the data for the plot
             V1 = self._app._vsweep_dataset['control_voltage']
             V2 = self._app._vsweep_dataset['WEtoRE_voltage']
             I  = self._app._vsweep_dataset['WE_current']
             self._cv_plot_Xs.append(V2)
             self._cv_plot_Ys.append(I)
-            #styles = []
             new_label = "Trial %d" % (len(self._cv_plot_labels) + 1,)
             self._cv_plot_labels.append(new_label)
             self.replot_cv()
+            #finish up
             #self.not_busy()
             #re-enable all the buttons, except the stop button
             self.enable_control_buttons()
-            self.vsweep_once_button.config(bg='light gray', relief='raised')
-            self.vsweep_stop_button.config(state='disabled')
-            self._app.print_comment("voltage sweep completed")
-            #self.replot_raw_spectrum_button.config(state='normal') #data can now be replotted
-            self.export_data_button.config(state='normal') #data can now be exported
-     
-    def vsweep_continually(self):
-        #disable all the control buttons, except the stop button
-        self.vsweep_continually_button.config(state='disabled', bg='green', relief="sunken")
-        self.disable_control_buttons()
-        self.vsweep_stop_button.config(state='normal')
-        self._vsweep_mode = "continual"
-        #get parameters
-        #frametype         = self.vsweep_settings_dialog.frametype_var.get()
-        #exposure_time     = float(self.vsweep_settings_dialog.form['exposure_time'])
-        #set up the image capture controller in loop mode
-        voltage_sweep = self._app.load_controller('voltage_sweep')
-        #voltage_sweep.set_configuration(frametype         = frametype,
-        #                               )
-        #refresh the metdata
-        self._app.query_metadata()
-        self._app.print_comment("Starting voltage sweep continually loop:")
-        voltage_sweep.start() #should not block
-        #schedule loop
-        self._vsweep_continually_loop()
-
-    def _vsweep_continually_loop(self):
-        voltage_sweep = self._app.load_controller('voltage_sweep')
-        #read out all pending events
-        while not voltage_sweep.event_queue.empty():
-            event, info = voltage_sweep.event_queue.get()
-            self.print_event(event,info)
-#            if   event == "FILTER_SWITCHER_STARTED":
-#            elif event == "IMAGE_CAPTURE_EXPOSURE_COMPLETED":
-#                #grab the image, comput the spectrum, then update them
-        #reschedule loop
-        if voltage_sweep.thread_isAlive():  #wait for the capture to finish, important!
-            self._vsweep_after_id = self._win.after(LOOP_DELAY, self._vsweep_continually_loop)
-        else:
-            #finish up
-            #enable all the buttons, except the stop button
-            self.enable_control_buttons()
-            self.vsweep_continually_button.config(state='normal', bg='light gray', relief = 'raised')
-            #data can now be exported
             self.export_data_button.config(state='normal')
-            #do not reschedule loop
+            self._app.print_comment("voltage sweep completed")
+            #self.export_data_button.config(state='normal') #data can now be exported
+            if self._vsweep_mode == 'once':
+                self.vsweep_once_button.config(bg='light gray', relief='raised')
+                self.vsweep_stop_button.config(state='disabled')
+                self._vsweep_stop = False
+            elif self._vsweep_mode == 'continual':
+                if self._vsweep_stop:
+                    self._vsweep_stop = False
+                    self._vsweep_mode = None
+                    self.vsweep_continually_button.config(bg='light gray', relief='raised')
+                    voltage_sweep.reset()
+                else:
+                    #reschedule another voltage sweep
+                    self.do_vsweep(mode = 'continual')
 
     def vsweep_stop(self):
         self.vsweep_stop_button.config(state='disabled')
-        voltage_sweep = self._app.load_controller('voltage_sweep')
+        voltage_sweep = self._app._load_controller('voltage_sweep')
+        self._vsweep_stop = True
         #force it to stop right now instead of finishing sleep
         voltage_sweep.abort()
-        if not self._vsweep_after_id is None:
-            #cancel the next scheduled loop time
-            self._win.after_cancel(self._vsweep_after_id)
-            #then enter the loop one more time to clean up
-            self._vsweep_continually_loop()
-        self._vsweep_mode = None
+#        if not self._vsweep_after_id is None:
+#            #cancel the next scheduled loop time
+#            self._win.after_cancel(self._vsweep_after_id)
+#            #then enter the loop one more time to clean up
+#            self._wait_on_vsweep_loop()
     
     def replot_cv(self):
         voltage_sweep = self._app._load_controller('voltage_sweep')
@@ -381,18 +368,19 @@ class GUI(GUIBase):
     def export_data(self):
         self._app.print_comment("Exporting data...")
         dt_now = datetime.datetime.utcnow()
-        dt_now_str = dt_now.strftime("%Y-%m-%d-%H_%M_%S")
+        dt_now_str = dt_now.strftime("%Y-%m-%d")
         #get some metadata for title
-        v_start = float(self._app.last_vsweep_metadata['v_start'])
-        v_end   = float(self._app.last_vsweep_metadata['v_end'])
-        default_filename = "%s_vsweep_%0.2f_to_%0.2fV.csv" % (dt_now_str,v_start,v_end)
-        fdlg = SaveFileDialog(self.win,title="Save Voltage Sweep Data")
-        userdata_path = self._app.config['paths']['data_dir']
+        v_start = float(self._app._vsweep_dataset.get_metadata('v_start'))
+        v_end   = float(self._app._vsweep_dataset.get_metadata('v_end'))
+        v_rate  = float(self._app._vsweep_dataset.get_metadata('v_rate'))
+        default_filename = "%s_vsweep_%0.2f_to_%0.2fV_by_%0.2fVps.csv" % (dt_now_str,v_start,v_end,v_rate)
+        fdlg = SaveFileDialog(self._win,title="Save Voltage Sweep Data")
+        userdata_path = self._app._config['paths']['data_dir']
 
         filename = fdlg.go(dir_or_file = userdata_path,
-                           pattern="*.csv",
-                           default=default_filename,
-                           key = None
+                           pattern     = "*.csv",
+                           default     = default_filename,
+                           key         = None,
                           )
         if filename:
             self._app.export_data(filename)
@@ -407,8 +395,21 @@ class GUI(GUIBase):
     def _update_cv_plot(self, X_now = None, Y_now = None):
         figure        = self.cv_plot_figure_widget.get_figure()
         plot_template = self.cv_plot_template
-        
+        #decide whether to plot the data (again) or update a current plot
+        do_plot = False
         if not plot_template.has_been_plotted():
+            do_plot = True
+        else:
+            #check if the plot has moved out of the boundaries
+            ax1 = figure.axes[0]
+            xlim = ax1.get_xlim()
+            ylim = ax1.get_ylim()
+            if not xlim[0] <= X_now[-1] <= xlim[1]:
+                do_plot = True
+            if not ylim[0] <= Y_now[-1] <= ylim[1]:
+                do_plot = True
+        #do the update
+        if do_plot:
             self._app.print_comment("Plotting the Current vs. Voltage.")
             Xs = self._cv_plot_Xs[:] #make copy to not mutate!
             if not X_now is None:
