@@ -17,7 +17,7 @@
 #define BAUDRATE 115200
 #define FLOAT_PRECISION_DIGITS 9
 #define FLOAT_DELTA 1e-20
-#define MAXCOMMANDS 12
+#define MAXCOMMANDS 14
 
 //Voltage sensing
 #define ADC_CHANNEL_VOLTAGE 0
@@ -42,8 +42,9 @@ bool         _currsense_auto  = false;
 #define V_MIN (-V_REF/2.0 + DELTA_V)
 #define V_MAX ( V_REF/2.0 - DELTA_V)
 
-//SerialCommand parser
+//SerialCommand parsers
 SerialCommand SCmd(MAXCOMMANDS);
+SerialCommand SweepSCmd(2);
 
 //Sample Timer
 Timer SampleTimer;
@@ -93,8 +94,13 @@ void setup(){
   SCmd.addCommand("VSWEEP.RAMP",   setSweepRampCommand);
   SCmd.addCommand("VSWEEP.SAMPLE", setSweepSampleRateCommand);
   SCmd.addCommand("VSWEEP.CYCLES", setSweepCyclesCommand);
+  
+  SCmd.addCommand("ABORT!", nullCommand);
 
   SCmd.setDefaultHandler(unrecognizedCommand);
+  //add commands that are only valid during an active sweep
+  SweepSCmd.addCommand("ABORT!", sweepAbortCommand);
+  
   Serial.print(F("#<INIT>\n"));
   //start up the SPI bus
   SPI.begin();
@@ -276,6 +282,7 @@ void getStatus()
 
 float _sweep_voltage_step;
 volatile float _sweep_control_voltage;
+volatile bool  _sweep_abort = false;
 
 //default parameters for the sweep
 float _sweep_v_start =  0;
@@ -284,13 +291,17 @@ float _sweep_v_rate  =  0.25;              //volts per sec
 float _sweep_samp_rate = SAMPRATE_DEFAULT; //samples per second
 float _sweep_cycles  =  1;
 
+
+void sweepAbortCommand(){
+    Serial.print(F("#<ABORT />\n"));
+    _sweep_abort = true;
+}
+
 void sweepTickISR(){
   //Serial.print(F("Tick!\n"));
   _sweep_control_voltage += _sweep_voltage_step;
-  noInterrupts();           // disable all interrupts
   //change output voltage
   control_DAC.setVoltageOutput(_sweep_control_voltage + V_VGND); //shift to center-rail
-  interrupts();           // enable interrupts
 }
 
 void sweepSampleCallback(){
@@ -395,14 +406,20 @@ void doSweep(){
   int i;
   for(i=0; i < _sweep_cycles; i++){
       while (_sweep_control_voltage <= _sweep_v_end){
+        SweepSCmd.readSerial(); //process serial commands
+        if (_sweep_abort == true) goto END_SWEEP;
         SampleTimer.update();
       }
       _sweep_voltage_step = -1.0*_sweep_voltage_step;
       while (_sweep_control_voltage >= _sweep_v_start){
+        SweepSCmd.readSerial(); //process serial commands
+        if (_sweep_abort == true) goto END_SWEEP;
         SampleTimer.update();
       }
       _sweep_voltage_step = -1.0*_sweep_voltage_step;
   }
+END_SWEEP:
+  _sweep_abort = false;
   SampleTimer.stop(sampleEvent);
   Serial.print(F("#</CSV_DATA>\n"));
   Serial.print(F("#</VSWEEP>\n"));
